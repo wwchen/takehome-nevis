@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: nevis-search
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/nevis}
+    username: ${DB_USER:nevis}
+    password: ${DB_PASSWORD:nevis}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: always
+
+app:
+  search:
+    default-limit: 20
+    max-limit: 100
+    document-candidates: 50
+    min-document-similarity: ${MIN_DOCUMENT_SIMILARITY:0.55}
+  enrichment:
+    provider: ${ENRICHMENT_PROVIDER:auto}   # auto | anthropic | baseline | none
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      model: ${ANTHROPIC_MODEL:claude-opus-5}
+      timeout-seconds: 30
+  security:
+    api-key: ${API_KEY:}                 # empty = no auth
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /docs
+    operations-sorter: method
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    ai.onnxruntime: WARN
