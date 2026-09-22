@@ -1,5 +1,7 @@
 # Nevis Search API
 
+[![CI](https://github.com/wwchen/takehome-nevis/actions/workflows/ci.yml/badge.svg)](https://github.com/wwchen/takehome-nevis/actions/workflows/ci.yml)
+
 A small Kotlin / Spring Boot service that stores advisors' clients and their documents and exposes one
 search endpoint across both:
 
@@ -226,6 +228,11 @@ TEST_DATABASE_URL=jdbc:postgresql://localhost:5432/nevis_test TEST_DATABASE_USER
 
 The Claude enricher is not exercised against the live API in tests; its offline parts (prompt/response parsing,
 fallback merging) are.
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push and pull request: Gradle
+wrapper validation, `./gradlew build` (all tests, against a `pgvector/pgvector:pg16` service container), and a
+Docker Compose smoke test that builds the image, starts the stack and drives both assignment examples through the
+real HTTP API.
 
 ---
 

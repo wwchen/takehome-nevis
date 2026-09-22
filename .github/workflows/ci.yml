@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: nevis_test
+          POSTGRES_USER: nevis
+          POSTGRES_PASSWORD: nevis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nevis -d nevis_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and run all tests
+        run: ./gradlew build --no-daemon
+        env:
+          # Integration tests use this Postgres instead of starting one with Testcontainers.
+          TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/nevis_test
+          TEST_DATABASE_USER: nevis
+          TEST_DATABASE_PASSWORD: nevis
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+          if-no-files-found: ignore
+
+  docker-smoke:
+    name: Docker Compose smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image and start the stack
+        run: docker compose up --build -d --wait --wait-timeout 300
+
+      - name: Exercise the API end to end
+        run: |
+          set -euo pipefail
+          H='Content-Type: application/json'
+          CLIENT=$(curl -fsS -X POST localhost:8080/clients -H "$H" \
+            -d '{"first_name":"John","last_name":"Doe","email":"john.doe@neviswealth.com"}')
+          echo "$CLIENT"
+          ID=$(echo "$CLIENT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          curl -fsS -X POST "localhost:8080/clients/$ID/documents" -H "$H" \
+            -d '{"title":"Utility bill – March 2026","content":"Electricity bill from Thames Power for 12 Harbour View, London. Amount due £142.18."}'
+          echo
+          curl -fsS 'localhost:8080/search?q=NevisWealth' | python3 -c '
+          import json,sys; r=json.load(sys.stdin)
+          assert r and r[0]["type"]=="client" and r[0]["client"]["email"]=="john.doe@neviswealth.com", r'
+          curl -fsS 'localhost:8080/search?q=address%20proof&type=document' | python3 -c '
+          import json,sys; r=json.load(sys.stdin)
+          assert r and r[0]["document"]["title"].startswith("Utility bill"), r'
+          curl -fsS localhost:8080/v3/api-docs > /dev/null
+          echo "smoke test passed"
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
