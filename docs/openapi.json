@@ -1,0 +1,545 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Nevis Search API",
+        "description": "Clients, their documents, and a unified search endpoint. Client search is lexical (name, email, description); document search is semantic (embeddings + cosine similarity), so 'address proof' also finds 'utility bill'.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8080",
+            "description": "Generated server url"
+        }
+    ],
+    "paths": {
+        "/clients": {
+            "post": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Create a client",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateClientRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation failed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Email already in use",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/clients/{id}/documents": {
+            "get": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "List a client's documents",
+                "operationId": "listDocuments",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Document"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Client not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Document"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Add a document to a client",
+                "description": "The content is embedded for semantic search and summarised at write time.",
+                "operationId": "createDocument",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateDocumentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Document"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation failed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Document"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Client not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Document"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/search": {
+            "get": {
+                "tags": [
+                    "Search"
+                ],
+                "summary": "Search clients and documents",
+                "description": "\n            Returns a single list mixing clients and documents, ordered by relevance.\n\n            * **Clients** match when the query appears (case-insensitively) in their name, email or description\n              (\"neviswealth\" finds `john.doe@neviswealth.com`).\n            * **Documents** match by meaning: the query is embedded and compared with each document's embedding,\n              so \"address proof\" finds a document about a utility bill. A literal hit in the title or content\n              is always kept and ranked at the top.\n        ",
+                "operationId": "search",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Free-text query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 1000,
+                            "minLength": 0
+                        },
+                        "example": "address proof"
+                    },
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "description": "Restrict results to one type",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "CLIENT",
+                                "DOCUMENT"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Max results (default 20, max 100)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "maximum": 100,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK (possibly empty list)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/SearchResult"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Missing/blank `q` or invalid `type`/`limit`",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/SearchResult"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/documents/{id}": {
+            "get": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Get a document by id",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Document"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Document not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Document"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/clients/{id}": {
+            "get": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Get a client by id",
+                "operationId": "get_1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Client not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "CreateClientRequest": {
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 10000,
+                        "minLength": 0
+                    },
+                    "social_links": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "maxItems": 20,
+                        "minItems": 0
+                    }
+                },
+                "required": [
+                    "email",
+                    "first_name",
+                    "last_name"
+                ]
+            },
+            "Client": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "first_name": {
+                        "type": "string"
+                    },
+                    "last_name": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "social_links": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "CreateDocumentRequest": {
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "content": {
+                        "type": "string",
+                        "maxLength": 200000,
+                        "minLength": 0
+                    }
+                },
+                "required": [
+                    "content",
+                    "title"
+                ]
+            },
+            "Document": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "client_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "content": {
+                        "type": "string"
+                    },
+                    "summary": {
+                        "type": "string"
+                    },
+                    "keywords": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "ClientSearchResult": {
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "client"
+                        ]
+                    },
+                    "score": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Relevance in [0, 1]; results are ordered by it descending.",
+                        "example": 0.87
+                    },
+                    "matched_on": {
+                        "type": "array",
+                        "description": "Which fields produced the match, e.g. [\"email\"] or [\"semantic\"].",
+                        "items": {
+                            "type": "string",
+                            "description": "Which fields produced the match, e.g. [\"email\"] or [\"semantic\"]."
+                        }
+                    },
+                    "client": {
+                        "$ref": "#/components/schemas/Client"
+                    }
+                }
+            },
+            "DocumentSearchResult": {
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "document"
+                        ]
+                    },
+                    "score": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Relevance in [0, 1]; results are ordered by it descending.",
+                        "example": 0.87
+                    },
+                    "matched_on": {
+                        "type": "array",
+                        "description": "Which fields produced the match, e.g. [\"email\"] or [\"semantic\"].",
+                        "items": {
+                            "type": "string",
+                            "description": "Which fields produced the match, e.g. [\"email\"] or [\"semantic\"]."
+                        }
+                    },
+                    "document": {
+                        "$ref": "#/components/schemas/Document"
+                    }
+                }
+            },
+            "SearchResult": {
+                "description": "One hit. `type` says which of `client` / `document` is populated.",
+                "discriminator": {
+                    "propertyName": "type"
+                },
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/ClientSearchResult"
+                    },
+                    {
+                        "$ref": "#/components/schemas/DocumentSearchResult"
+                    }
+                ],
+                "properties": {
+                    "type": {
+                        "type": "string"
+                    },
+                    "score": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Relevance in [0, 1]; results are ordered by it descending.",
+                        "example": 0.87
+                    },
+                    "matched_on": {
+                        "type": "array",
+                        "description": "Which fields produced the match, e.g. [\"email\"] or [\"semantic\"].",
+                        "items": {
+                            "type": "string",
+                            "description": "Which fields produced the match, e.g. [\"email\"] or [\"semantic\"]."
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
